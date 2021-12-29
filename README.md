@@ -131,15 +131,33 @@ Let's briefly describe it:
  
  ============================================================================================================
  
- 3.Now for the second part of browser process analysis we got to the point where we will be able to understand and debug the renderer, but we won't go there yet. I explicitly left one more function to analyse after RunBrowserProcessMain. Now what i left outside is that in content_main_runner_impl.cc there is another function which is called after we spawn the renderer and it's called RunOtherNamedProcessTypeMain. This process is incharge for running all the other processes.![Captureother](https://user-images.githubusercontent.com/25670930/147548808-5fcd1c18-87bf-4be7-aca6-b09d0de235eb.PNG)
+ 3.Now for the second part of browser process analysis we got to the point where we will be able to understand and debug the renderer, but we won't go there yet. I explicitly left one more function to analyse after RunBrowserProcessMain, well theoreticall it's after RunBrowser, but as you may recal RunBrowser is a wrapper for RunBrowserProcessMain. Now what i left outside is that in the file called content_main_runner_impl.cc in the folder src/content/app there is another function which is called after we spawn the renderer and it's called RunOtherNamedProcessTypeMain. This process is incharge for running all the other processes.![Captureother](https://user-images.githubusercontent.com/25670930/147548808-5fcd1c18-87bf-4be7-aca6-b09d0de235eb.PNG). Unfortunatelly we will have to analyse it from inside the renderer. While it not might make sense now, it will when we do dynamic analysis. For now let's understand what happends in the code.We see it's prototype is ![Capturzaqe](https://user-images.githubusercontent.com/25670930/147589925-f9a48162-add1-49a1-a368-41e7e830e098.PNG), which indicates that it will take the arguments passed to cmdline, which process type to expect and a chrome delegate.We than get to the beginning of the function where we have a macro definition to check for platform specifics and check for which process to instantiate a event handler. aka to check to see if it runs some functions for console process or for the browser process. ![Capturqqqqqqqqe](https://user-images.githubusercontent.com/25670930/147590080-1bcaebed-e426-4478-8e6a-3ede7eb400cc.PNG). We than iterate over the passed processes and compare it to a list of knows processes and run the respective process. ![Captuqaxzcre](https://user-images.githubusercontent.com/25670930/147590609-0bbac184-5715-4793-80ec-4d80f02923af.PNG) In case we don't get the respective process than it's a custom process implemented by someone![Captureshaveica](https://user-images.githubusercontent.com/25670930/147590710-b05f7f7a-da54-49a5-915e-5feec1b2b210.PNG)
+Here is a link to implement custom process and we will use this example for the second part of dynamic analysis . https://bitbucket.org/chromiumembedded/cef/wiki/Tutorial . We will also be doing one the first part of the dynamic analysis the analysis of the already mentioned code but when the renderer spawns.
+
+=====================================================================
+
+Dynamic Analysis Part 
+ 
+=====================================================================
+
+4.Renderer Analysis 
+
+Last time we left we finished the browser process analysis and now it's time we have all been waiting for to go and do the renderer analysis part. Right, when i was playing with chromium i managed to make it crash and i got the following stack trace. ![numberunu](https://user-images.githubusercontent.com/25670930/147592286-b67e985c-a31c-485c-98eb-5f0d523a831e.PNG) Based on this we know out journey starts at content::RendererMain which is located in \content\renderer\renderer_main.cc . You guest it out starting point is RendererMain. Lets start by analysing how it's defined and a little bit inside of it ![rendereranalysis](https://user-images.githubusercontent.com/25670930/147592611-aa02de93-2b40-4496-9cfc-f84f5fac9494.PNG) . We can see it accepts a parameters which is of type MainFunctionParams which means this function will accept the passed arguments to the binary. Next we add a trace point so we can know that we got to calling RendererMain, and than dereference the value of parameters and save it into command_line. Than we have some macros which check for platform specific architecture which we can ignore  ![macro](https://user-images.githubusercontent.com/25670930/147592935-3f391bc1-545d-48fc-8da0-bd19e658bf52.PNG), we check for value passed to kTimeZoneForTesting which is a time zone to use for testing, than we get to meet a new class and data type used call icu. 
+ ![habarnam](https://user-images.githubusercontent.com/25670930/147646126-2e383fcf-706b-4914-8de4-1668b92831a3.PNG)
+Now searching for any source of defintion for that we arrive at https://unicode-org.github.io/icu-docs . If we look at the beginning of the file where the include directive is we can see it's a third party library. So until now we know it is a third party library which deals with international componenets for unicode aka we use this for unicode support. Ok but what does that function do? Going over https://unicode-org.github.io/icu-docs we see ![icu](https://user-images.githubusercontent.com/25670930/147646458-94da76e1-908c-40c8-b297-35f1b3c58120.PNG), aka sets the default time zone based on what we set as parameters. We than init skia library and handle --renderer-startup-dialog 
+![curumare](https://user-images.githubusercontent.com/25670930/147646609-a987485c-ab88-43e6-b02e-571827617121.PNG). We are than meet by a new class RendererMainPlatformDelegate. What this do ? Well first we have to specify this is an abstract class which is platform specific. for our case it will be located at /content/renderer inside of the file called renderer_main_platform_delegate_win.cc . It looks like this ![rendererhelper](https://user-images.githubusercontent.com/25670930/147647778-2dfc8d52-c150-4b41-a7f6-7da057f674c0.PNG)
 
 
+ 
 
 
+ 
+=====================================================================
 
-
-
-
+Dynamic Analysis Part
+ 
+ 
+Now in order to be able to debug it dynamically, in case you are as noob as i am you will want to run windbg from cmd.exe as follows windbg.exe chrome.exe -G -o --renderer-startup-dialog --no-sandbox --wait-for-debugger-children=renderer --renderer-process-limit=1 --allow-pre-commit-input --allow-sandbox-debugging --time-zone-for-testing="US/Pacific", and set .childdbg 1 in order to be able to debug the spawned child process. From there you will want to bp content!content::RendererMain and let it run for like 5 or 6 times. after that we got to ![reaaa](https://user-images.githubusercontent.com/25670930/147644911-d90c5ec4-9ff9-4502-bb09-5c41e95265f6.PNG). 
 
 
 
